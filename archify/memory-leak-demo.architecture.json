@@ -1,0 +1,446 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Java Memory Leak Demo \u2014 Detect & Root-Cause with Elastic",
+    "locale": "en",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "loadgen",
+      "type": "external",
+      "label": "loadgen",
+      "sublabel": "Python traffic generator",
+      "pos": [
+        30,
+        300
+      ],
+      "size": [
+        120,
+        62
+      ],
+      "tag": "compose"
+    },
+    {
+      "id": "leaky-app",
+      "type": "backend",
+      "label": "leaky-app",
+      "sublabel": "Java 21 \u00b7 :8080",
+      "pos": [
+        210,
+        300
+      ],
+      "size": [
+        160,
+        62
+      ],
+      "tag": "compose"
+    },
+    {
+      "id": "threadcontext",
+      "type": "database",
+      "label": "ThreadContext map",
+      "sublabel": "leak: clearMap() skipped",
+      "pos": [
+        215,
+        130
+      ],
+      "size": [
+        150,
+        58
+      ]
+    },
+    {
+      "id": "edot",
+      "type": "security",
+      "label": "EDOT Java agent",
+      "sublabel": "baked into image",
+      "pos": [
+        440,
+        300
+      ],
+      "size": [
+        136,
+        62
+      ],
+      "tag": "compose"
+    },
+    {
+      "id": "jfr-watcher",
+      "type": "backend",
+      "label": "jfr-watcher",
+      "sublabel": "JFR capture \u00b7 0.25 CPU",
+      "pos": [
+        225,
+        470
+      ],
+      "size": [
+        130,
+        58
+      ],
+      "tag": "optional"
+    },
+    {
+      "id": "jdk-sidecar",
+      "type": "backend",
+      "label": "jdk-sidecar",
+      "sublabel": "jcmd cross-container dumps",
+      "pos": [
+        470,
+        470
+      ],
+      "size": [
+        136,
+        58
+      ],
+      "tag": "optional"
+    },
+    {
+      "id": "mat",
+      "type": "backend",
+      "label": "Eclipse MAT",
+      "sublabel": "headless Leak Suspects",
+      "pos": [
+        40,
+        470
+      ],
+      "size": [
+        130,
+        58
+      ],
+      "tag": "optional"
+    },
+    {
+      "id": "elastic",
+      "type": "cloud",
+      "label": "Elastic Observability",
+      "sublabel": "Serverless \u00b7 OTLP ingest",
+      "pos": [
+        660,
+        300
+      ],
+      "size": [
+        190,
+        62
+      ]
+    },
+    {
+      "id": "kibana",
+      "type": "cloud",
+      "label": "Kibana detection",
+      "sublabel": "dashboard \u00b7 alert \u00b7 ML job",
+      "pos": [
+        940,
+        300
+      ],
+      "size": [
+        160,
+        62
+      ]
+    },
+    {
+      "id": "oom",
+      "type": "external",
+      "label": "OutOfMemoryError",
+      "sublabel": "heap -Xmx512m \u00b7 ~20\u201330 min",
+      "pos": [
+        960,
+        130
+      ],
+      "size": [
+        180,
+        58
+      ]
+    },
+    {
+      "id": "memory-sampler",
+      "type": "backend",
+      "label": "memory-sampler",
+      "sublabel": "histogram \u00b7 JFR sampling",
+      "pos": [
+        470,
+        120
+      ],
+      "size": [
+        150,
+        58
+      ],
+      "tag": "optional profile"
+    },
+    {
+      "id": "elastic-agent",
+      "type": "security",
+      "label": "elastic-agent",
+      "sublabel": "Fleet \u00b7 Docker \u00b7 dump Filestream",
+      "pos": [
+        650,
+        120
+      ],
+      "size": [
+        170,
+        58
+      ],
+      "tag": "optional profile"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Docker Compose \u2014 local demo (mem-caged)",
+      "wraps": [
+        "loadgen",
+        "leaky-app",
+        "threadcontext",
+        "edot",
+        "jfr-watcher",
+        "jdk-sidecar",
+        "mat",
+        "memory-sampler",
+        "elastic-agent"
+      ],
+      "pad": 20
+    },
+    {
+      "kind": "security-group",
+      "label": "forensics (opt-in via .env)",
+      "wraps": [
+        "jfr-watcher",
+        "jdk-sidecar",
+        "mat"
+      ],
+      "pad": 14
+    },
+    {
+      "kind": "security-group",
+      "label": "opt-in compose profiles",
+      "wraps": [
+        "memory-sampler",
+        "elastic-agent"
+      ],
+      "pad": 14
+    }
+  ],
+  "connections": [
+    {
+      "from": "loadgen",
+      "to": "leaky-app",
+      "label": "HTTP REST :8080",
+      "variant": "emphasis",
+      "labelAt": [
+        180,
+        376
+      ]
+    },
+    {
+      "from": "leaky-app",
+      "to": "threadcontext",
+      "label": "MDC entries put/request",
+      "route": "straight",
+      "labelAt": [
+        348,
+        255
+      ]
+    },
+    {
+      "from": "leaky-app",
+      "to": "edot",
+      "label": "in-process telemetry",
+      "route": "straight",
+      "labelAt": [
+        405,
+        288
+      ]
+    },
+    {
+      "from": "edot",
+      "to": "elastic",
+      "label": "OTLP traces \u00b7 metrics \u00b7 logs",
+      "variant": "emphasis",
+      "labelAt": [
+        618,
+        376
+      ]
+    },
+    {
+      "from": "elastic",
+      "to": "kibana",
+      "label": "dashboard \u00b7 alert \u00b7 ML",
+      "route": "straight",
+      "labelAt": [
+        895,
+        376
+      ]
+    },
+    {
+      "from": "leaky-app",
+      "to": "oom",
+      "label": "growth 320 KB/s \u2192 OOM",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "left",
+      "via": [
+        [
+          200,
+          331
+        ],
+        [
+          200,
+          88
+        ],
+        [
+          870,
+          88
+        ],
+        [
+          870,
+          159
+        ]
+      ],
+      "labelAt": [
+        535,
+        88
+      ]
+    },
+    {
+      "from": "jdk-sidecar",
+      "to": "leaky-app",
+      "label": "jcmd dump capture",
+      "variant": "dashed",
+      "route": "straight",
+      "via": [
+        [
+          538,
+          415
+        ],
+        [
+          290,
+          415
+        ]
+      ],
+      "labelAt": [
+        414,
+        402
+      ],
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "from": "jdk-sidecar",
+      "to": "mat",
+      "label": "hprof",
+      "variant": "dashed",
+      "route": "straight",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [
+        [
+          538,
+          580
+        ],
+        [
+          105,
+          580
+        ]
+      ],
+      "labelAt": [
+        320,
+        580
+      ]
+    },
+    {
+      "from": "jfr-watcher",
+      "to": "leaky-app",
+      "label": "JFR stream",
+      "variant": "dashed",
+      "route": "straight",
+      "labelAt": [
+        232,
+        420
+      ]
+    },
+    {
+      "from": "memory-sampler",
+      "to": "leaky-app",
+      "label": "diagnostics histogram/JFR",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "left",
+      "via": [
+        [
+          545,
+          205
+        ],
+        [
+          190,
+          205
+        ],
+        [
+          190,
+          331
+        ]
+      ],
+      "labelAt": [
+        367,
+        205
+      ]
+    },
+    {
+      "from": "elastic-agent",
+      "to": "elastic",
+      "label": "dump Filestream \u00b7 Docker logs",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "right",
+      "via": [
+        [
+          735,
+          205
+        ],
+        [
+          885,
+          205
+        ],
+        [
+          885,
+          331
+        ]
+      ],
+      "labelAt": [
+        800,
+        205
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "The Leak",
+      "items": [
+        "Log4j ThreadContext entries accumulate per reused Tomcat worker thread",
+        "Leak mode skips ThreadContext.clearMap(); toggle changes cleanup, not traffic",
+        "OOM in ~20\u201330 min at 5 entries \u00d7 64 KB \u00d7 1 req/s on a 512 MB heap"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Detection in Elastic",
+      "items": [
+        "EDOT agent ships OTLP traces, JVM metrics, logs to Serverless ingest",
+        "Heap alert (>75%, 3-min avg) fires minutes before OOM; ML job on floor slope",
+        "APM error spike + OOM ERROR logs land in Discover",
+        "Opt-in elastic-agent ships container logs + dump Filestream"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Root-Cause Forensics",
+      "items": [
+        "jdk-sidecar captures heap dumps cross-container with jcmd (production-safe)",
+        "Eclipse MAT headless runs Leak Suspects on hprof dumps",
+        "Optional JFR watcher streams recordings for allocation analysis",
+        "memory-sampler (opt-in) streams continuous class histograms"
+      ]
+    }
+  ]
+}
